@@ -1,0 +1,18 @@
+# data — raw/processed files, never committed
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+.pytest_cache/
+.ruff_cache/
+
+# Editor swap files
+*.swo
+*.swp
+
+# Claude Code local settings
+.claude/
