@@ -3,7 +3,7 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 COPY frontend/package*.json ./
-RUN npm ci --prefer-offline
+RUN npm install --no-audit
 
 COPY frontend/ .
 
