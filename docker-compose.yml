@@ -1,5 +1,16 @@
+## NBA PropCast — local dev / integration compose
+##
+## Default (SQLite — zero config, data already in ml-pipeline/data/):
+##   docker-compose up
+##
+## Postgres variant (production-like):
+##   docker-compose --profile postgres up
+##   Then backfill: docker-compose exec backend uv run python -m propcast.ingest.run backfill
+
 services:
+  # ── optional postgres ─────────────────────────────────────────────────────
   postgres:
+    profiles: ["postgres"]
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: propcast
@@ -9,27 +20,51 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U propcast"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
+  # ── backend ───────────────────────────────────────────────────────────────
   backend:
-    build: ./backend
+    build:
+      context: .                      # repo root — needed so COPY ml-pipeline/ works
+      dockerfile: backend/Dockerfile
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://propcast:propcast@postgres:5432/propcast
-    depends_on:
-      - postgres
+      # SQLite by default; override with postgres URL when using --profile postgres
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////data/propcast.db}
+      MODELS_DIR: /data/models
+      FEATURE_PATH: /data/processed/features.parquet
+      BACKTEST_RESULTS_PATH: /data/backtest_results.json
+      # Comma-separated allowed CORS origins (picked up by Pydantic Settings)
+      CORS_ORIGINS: '["http://localhost:5173","http://localhost:80"]'
     volumes:
-      - ./backend:/app
+      # Mount data directory so models, DB, and features are available
+      # without baking large binary files into the image.
+      - ./ml-pipeline/data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
 
+  # ── frontend ──────────────────────────────────────────────────────────────
   frontend:
-    build: ./frontend
+    build:
+      context: .                       # repo root
+      dockerfile: frontend/Dockerfile
+      args:
+        # Baked into the JS bundle at build time — change to Railway URL for prod
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
     ports:
-      - "5173:5173"
+      - "5173:80"
     depends_on:
-      - backend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      backend:
+        condition: service_healthy
 
 volumes:
   postgres_data:

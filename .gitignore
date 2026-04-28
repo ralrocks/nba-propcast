@@ -1,5 +1,12 @@
-# data — raw/processed files, never committed
-data/
+# Raw downloaded data — never commit (large, regenerable)
+ml-pipeline/data/raw/
+
+# SQLite WAL files — transient, not part of the committed snapshot
+*.db-shm
+*.db-wal
+
+# Generated report — written at runtime, not needed in git
+ml-pipeline/data/backtest_results.json
 
 # Python
 __pycache__/
@@ -9,6 +16,10 @@ __pycache__/
 dist/
 .pytest_cache/
 .ruff_cache/
+
+# Node
+node_modules/
+frontend/dist/
 
 # Editor swap files
 *.swo

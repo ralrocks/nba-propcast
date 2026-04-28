@@ -1,0 +1,32 @@
+# Version control
+.git
+.gitignore
+
+# Python caches
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.pytest_cache
+**/.ruff_cache
+
+# Virtual envs
+**/.venv
+**/venv
+
+# Node
+**/node_modules
+frontend/dist
+
+# ML data — NOT ignored here; ml-pipeline/data is mounted as a volume at runtime.
+# Uncomment the next line if you want to bake data into the image (not recommended):
+# ml-pipeline/data
+
+# Local config / secrets
+**/.env
+**/*.env.local
+
+# Editor / OS
+.DS_Store
+**/.DS_Store
+.idea
+.vscode

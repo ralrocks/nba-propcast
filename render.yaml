@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: propcast-backend
+    env: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: CORS_ORIGINS
+        value: '["*"]'
