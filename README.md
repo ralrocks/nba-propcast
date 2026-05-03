@@ -4,7 +4,7 @@ ML-powered NBA player prop projections with market-benchmarked backtesting.
 
 Enter a player + prop type, get a projection, confidence interval, and edge vs the DraftKings closing line — with honest CLV-tracked performance over time.
 
-**Stack:** XGBoost · FastAPI · React · PostgreSQL · Railway + Vercel
+**Stack:** XGBoost · FastAPI · React · SQLite/PostgreSQL · Render + Vercel
 
 ---
 
@@ -13,11 +13,11 @@ Enter a player + prop type, get a projection, confidence interval, and edge vs t
 | Feature | Detail |
 |---|---|
 | Projections | PTS, REB, AST, 3PM per player per game |
-| Model | XGBoost regressor, one per stat, time-series CV only |
+| Model | XGBoost regressor, one per stat, expanding-window time-series CV |
 | Calibration | Isotonic regression post-training — no overconfident probabilities |
 | Edge calc | Projection vs DraftKings closing line (not opening — closing is honest) |
-| Backtest | Historical CLV tracking with Brier score + MAE |
-| UI | Player + prop search → projection card with CI bar + backtest sparkline |
+| Backtest | CLV, Brier score, MAE, ROI vs DK closing lines (sim + live modes) |
+| UI | Player search → projection card with CI bar + P(over) + backtest dashboard |
 
 ---
 
@@ -33,20 +33,20 @@ Enter a player + prop type, get a projection, confidence interval, and edge vs t
 ┌────────────────────────▼────────────────────────────────┐
 │                     Backend API                         │
 │              FastAPI + Pydantic + SQLAlchemy            │
-│                     (Railway)                           │
+│                     (Render)                            │
 └──────────┬──────────────────────────┬───────────────────┘
            │                          │
 ┌──────────▼──────────┐  ┌────────────▼───────────────────┐
 │     PostgreSQL      │  │         ML Pipeline             │
 │  game logs · lines  │  │  ingest → features → XGBoost   │
-│  projections · bets │  │  → isotonic cal → backtest      │
-│     (Railway)       │  │  (offline, artifacts in DB)    │
+│  (Render, SQLite    │  │  → isotonic cal → backtest      │
+│   locally)          │  │  (offline, artifacts committed) │
 └─────────────────────┘  └────────────────────────────────┘
            ▲                          ▲
            │                          │
 ┌──────────┴──────────┐  ┌────────────┴───────────────────┐
 │      nba_api        │  │      DraftKings v5 API          │
-│  V3 game logs +     │  │   closing lines for CLV         │
+│  game logs +        │  │   closing lines for CLV         │
 │  player stats       │  │   backtest                      │
 └─────────────────────┘  └────────────────────────────────┘
 ```
@@ -56,17 +56,20 @@ Enter a player + prop type, get a projection, confidence interval, and edge vs t
 ## ML Methodology
 
 **No shortcuts:**
-- Time-series cross-validation only — no `train_test_split`
-- Features at time T use only data available before T (no leakage)
-- Isotonic calibration before any probabilistic metric is reported
+- Expanding-window time-series CV only — no `train_test_split`, no data leakage
+- Features at time T use only data available before T (`shift(1)` before every rolling window)
+- Isotonic calibration fit on OOF predictions before any probabilistic metric is reported
 - Backtest vs DK **closing** lines, not opening lines
-- Numbers are reported as-is — no cherry-picked date ranges
+- Numbers reported as-is — no cherry-picked date ranges
 
-**Feature set (planned):**
-- Rolling averages (L5, L10, season) for each stat
-- Home/away split, rest days, pace, opponent defensive rating
-- Usage rate, minutes trend
-- Vegas total + spread as market priors
+**Feature set (implemented):**
+- Rolling means (L5, L10, season) for PTS, REB, AST, 3PM, MIN
+- Rolling L5 std for each stat — consistency signal
+- Home/away, days rest, back-to-back flag, game number in season
+
+**Backtest modes:**
+- `--mode sim` — synthetic lines generated from each player's season rolling average ± noise at -110/-110; exercises the full pipeline immediately
+- `--mode live` — real DK closing lines from the DB; requires running `dk_scraper` daily for 30+ game days
 
 ---
 
@@ -76,21 +79,21 @@ Enter a player + prop type, get a projection, confidence interval, and edge vs t
 nba-propcast/
 ├── ml-pipeline/          # XGBoost training, backtesting, feature engineering
 │   ├── src/propcast/
-│   │   ├── ingest/       # nba_api + DraftKings data pulls
-│   │   ├── features/     # rolling stats, opponent adjustments
-│   │   ├── models/       # XGBoost training + isotonic calibration
-│   │   └── backtest/     # CLV + Brier score evaluation
-│   └── tests/
+│   │   ├── ingest/       # nba_api pull (historical + live) + DraftKings scraper
+│   │   ├── features/     # rolling stats, context features (home/rest/pace)
+│   │   ├── models/       # XGBoost training + isotonic calibration + predict
+│   │   └── backtest/     # CLV + Brier + MAE + ROI evaluation
+│   └── tests/            # pytest suite (CV logic, train, predict)
 ├── backend/              # FastAPI REST API
 │   └── app/
-│       ├── routers/      # /projections, /players, /backtest
-│       ├── models/       # SQLAlchemy ORM
-│       └── schemas/      # Pydantic request/response
+│       ├── routers/      # /players/search, /predict, /backtest
+│       └── config.py     # Pydantic Settings, path resolution
 ├── frontend/             # React + Vite UI
 │   └── src/
-│       ├── components/   # PlayerSearch, ProjectionCard, BacktestChart
-│       └── pages/
-└── docker-compose.yml    # Local dev: backend + frontend + postgres
+│       ├── pages/        # Predict.tsx, Backtest.tsx
+│       └── lib/api.ts    # typed fetch client
+├── docker-compose.yml    # Local dev: SQLite default, --profile postgres for PG
+└── render.yaml           # Render Blueprint for one-click backend deploy
 ```
 
 ---
@@ -112,34 +115,45 @@ Backend: `http://localhost:8000` · Frontend: `http://localhost:5173` · API doc
 ```bash
 cd ml-pipeline
 uv sync
-uv run python src/propcast/ingest/smoke_test.py   # verify nba_api connection
+
+# Pull historical game logs (2023-24 season)
+uv run python -m propcast.ingest.run backfill --seasons 2023-24
+
+# Build feature matrix
+uv run python -m propcast.features.build
+
+# Train models (all 4 stats)
+uv run python -m propcast.models.train
+
+# Run backtest (sim mode — no DK data required)
+uv run python -m propcast.backtest.run --mode sim
 ```
 
 ---
 
-## Progress
+## Build Status
 
-| Week | Focus | Status |
-|------|-------|--------|
-| 1 | Data pipeline · nba_api ingest · raw parquet storage | **In progress** |
-| 2 | Feature engineering · XGBoost training · time-series CV | Upcoming |
-| 3 | FastAPI backend · PostgreSQL schema · projections endpoint | Upcoming |
-| 4 | React frontend · backtesting dashboard · Railway + Vercel deploy | Upcoming |
+[![CI](https://github.com/ralrocks/nba-propcast/actions/workflows/ci.yml/badge.svg)](https://github.com/ralrocks/nba-propcast/actions/workflows/ci.yml)
+
+4 jobs: ML pipeline tests · Backend tests · Frontend build · Docker smoke test
 
 ---
 
 ## Backtest Results
 
-_Will be populated after Week 2 training run. Target: honest CLV > 0 on held-out 2023-24 season._
+Live results require 30+ days of DK closing line data collected via `dk_scraper`.
+Sim-mode results (synthetic lines from season rolling avg ± noise, -110/-110) are available after running `uv run python -m propcast.backtest.run --mode sim`.
+
+_Production backtest results will be posted here after the live DK scraper has run through a full slate._
 
 ---
 
 ## Resume / Portfolio Context
 
 Built to demonstrate:
-- **Feature engineering** with time-series discipline (no leakage)
-- **Calibration** — isotonic regression, Brier score reporting
+- **Feature engineering** with time-series discipline — `shift(1)` enforced, leakage check built into the pipeline
+- **Calibration** — isotonic regression on OOF predictions, Brier score reported
 - **Market benchmarking** — CLV vs DK closing lines, not a toy accuracy metric
-- **Full-stack deployment** — containerized, CI/CD, production infra
+- **Full-stack deployment** — containerized (Docker + docker-compose), GitHub Actions CI, Render + Vercel
 
 Not just "built an ML model."
