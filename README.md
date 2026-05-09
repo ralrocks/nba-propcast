@@ -1,5 +1,5 @@
 # NBA PropCast
-
+Live at: https://nba-propcast.vercel.app/
 ML-powered NBA player prop projections with market-benchmarked backtesting.
 
 Enter a player + prop type, get a projection, confidence interval, and edge vs the DraftKings closing line — with honest CLV-tracked performance over time.
