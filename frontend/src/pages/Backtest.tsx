@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import { type BacktestResults, getBacktestResults, runBacktest } from "@/lib/api"
+import { type BacktestResults, getBacktestResults } from "@/lib/api"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -116,10 +116,10 @@ export default function BacktestPage() {
     setRunning(true)
     setError(null)
     try {
-      const res = await runBacktest(mode)
+      const res = await getBacktestResults()
       setResults(res)
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Backtest failed")
+      setError("No backtest results available yet.")
     } finally {
       setRunning(false)
     }
@@ -164,7 +164,7 @@ export default function BacktestPage() {
           ) : (
             <RefreshCw className="h-4 w-4" />
           )}
-          {running ? "Running…" : "Run backtest"}
+          {running ? "Loading…" : "Refresh"}
         </Button>
       </div>
 
