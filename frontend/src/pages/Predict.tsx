@@ -205,7 +205,7 @@ export default function PredictPage() {
             <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
           )}
           {showDropdown && (
-            <div className="absolute z-10 mt-1 w-full rounded-md border bg-popover shadow-md">
+            <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md">
               {players.map((p) => (
                 <button
                   key={p.player_id}
