@@ -1,0 +1,38 @@
+{
+  "pts": {
+    "brier": 0.2286,
+    "clv": -0.0267,
+    "mae": 4.336,
+    "roi": 0.1891,
+    "n_bets": 7186,
+    "n_samples": 24519,
+    "mode": "sim"
+  },
+  "reb": {
+    "brier": 0.2248,
+    "clv": -0.0487,
+    "mae": 1.783,
+    "roi": 0.1501,
+    "n_bets": 6437,
+    "n_samples": 24519,
+    "mode": "sim"
+  },
+  "ast": {
+    "brier": 0.2239,
+    "clv": -0.0204,
+    "mae": 1.295,
+    "roi": 0.0952,
+    "n_bets": 8245,
+    "n_samples": 24519,
+    "mode": "sim"
+  },
+  "fg3m": {
+    "brier": 0.2096,
+    "clv": -0.0489,
+    "mae": 0.827,
+    "roi": 0.0497,
+    "n_bets": 8806,
+    "n_samples": 24519,
+    "mode": "sim"
+  }
+}

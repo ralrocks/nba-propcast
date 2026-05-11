@@ -5,8 +5,6 @@ ml-pipeline/data/raw/
 *.db-shm
 *.db-wal
 
-# Generated report — written at runtime, not needed in git
-ml-pipeline/data/backtest_results.json
 
 # Python
 __pycache__/
